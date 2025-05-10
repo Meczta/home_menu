@@ -16,6 +16,7 @@
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.uniproject.homemenu",
       "edgeToEdgeEnabled": true
     },
     "web": {
