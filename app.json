@@ -16,8 +16,8 @@
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.uniproject.homemenu",
       "googleServicesFile": "./google-services.json",
+      "package": "com.uniproject.homemenu",
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -27,6 +27,7 @@
     },
     "plugins": [
       "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       "expo-router",
       [
         "expo-splash-screen",
