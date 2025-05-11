@@ -81,15 +81,15 @@ const _Layout = () => {
             />
 
             <Tabs.Screen
-                name="saved"
+                name="add"
                 options={{
-                    title: "Saved",
+                    title: "Add",
                     headerShown: false,
                     tabBarIcon: ({ focused }) => (
                         <TabIcon
                             focused={focused}
                             icon={icons.save}
-                            title="Saved"
+                            title="Add"
                         />
                     )
                 }}
