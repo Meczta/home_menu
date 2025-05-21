@@ -8,6 +8,8 @@ import play from "@/assets/icons/play.png";
 import arrow from "@/assets/icons/arrow.png";
 import clock from "@/assets/icons/clock.png";
 import dots from "@/assets/icons/dots.png";
+import bookmark_saved from "@/assets/icons/bookmark_saved.png";
+import bookmark_unsaved from "@/assets/icons/bookmark_unsaved.png";
 
 export const icons = {
   home,
@@ -20,4 +22,6 @@ export const icons = {
   arrow,
   clock,
   dots,
+  bookmark_saved,
+  bookmark_unsaved,
 };
