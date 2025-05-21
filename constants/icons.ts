@@ -10,6 +10,8 @@ import clock from "@/assets/icons/clock.png";
 import dots from "@/assets/icons/dots.png";
 import bookmark_saved from "@/assets/icons/bookmark_saved.png";
 import bookmark_unsaved from "@/assets/icons/bookmark_unsaved.png";
+import notFound from "@/assets/icons/notFound.png";
+import empty_recipes_folder from "@/assets/icons/empty_recipes_folder.png";
 
 export const icons = {
   home,
@@ -24,4 +26,6 @@ export const icons = {
   dots,
   bookmark_saved,
   bookmark_unsaved,
+  notFound,
+  empty_recipes_folder,
 };

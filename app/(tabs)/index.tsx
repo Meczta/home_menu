@@ -2,27 +2,31 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
     Image,
-    ScrollView,
+    // ScrollView, // ScrollView тут не потрібен, якщо використовується FlatList
     Text,
     View,
-    FlatList, // Краще для списків, ніж ScrollView з map
+    FlatList,
     ActivityIndicator,
     StyleSheet,
-    TouchableOpacity, TextInput, // Для клікабельних карток
+    TouchableOpacity,
+    TextInput, // TextInput вже імпортовано
+    Platform, // Додамо для відступів
+    StatusBar, Alert,  // Додамо для відступів
 } from "react-native";
-import { images } from "@/constants/images"; // Переконайся, що шляхи правильні
-import { icons } from "@/constants/icons";   // Переконайся, що шляхи правильні
-import SearchBar from "@/components/SearchBar"; // Твій компонент пошуку
+import { images } from "@/constants/images";
+import { icons } from "@/constants/icons";
+// Якщо ти використовуєш свій компонент SearchBar, імпортуй його.
+// Я бачу, що він закоментований, тому використовую TextInput.
+// import SearchBar from "@/components/SearchBar";
 import { useRouter } from "expo-router";
 import auth from "@react-native-firebase/auth";
 import firestore, { FirebaseFirestoreTypes } from "@react-native-firebase/firestore";
 
-// Тип для рецепту (можна винести в окремий файл types.ts)
 interface Recipe {
     id: string;
     name: string;
     cookingTime: string;
-    ingredients: string; // Залишаємо як рядок, як ти просила
+    ingredients: string;
     description: string;
     imageUrl?: string;
     userId: string;
@@ -30,27 +34,27 @@ interface Recipe {
     createdAt?: FirebaseFirestoreTypes.Timestamp;
 }
 
-// Компонент картки рецепту (можна взяти той, що ми створювали, або адаптувати)
-// Якщо RecipeCard.js вже існує і підходить, імпортуй його.
-// Для прикладу, я створю спрощену версію тут, але краще винести в окремий файл.
+// Компонент картки рецепту
+// РЕКОМЕНДАЦІЯ: Винеси цей компонент в окремий файл (наприклад, components/RecipeCardItem.tsx)
+// та імпортуй його сюди і в search.tsx, щоб уникнути дублювання.
 const RecipeCardItem = ({ item, onPress }: { item: Recipe; onPress: () => void }) => (
     <TouchableOpacity onPress={onPress} style={styles.recipeCard}>
         <Image
-            source={item.imageUrl ? { uri: item.imageUrl } : images.placeholder} // Додай images.placeholder у свої константи
+            source={item.imageUrl ? { uri: item.imageUrl } : images.placeholder}
             style={styles.recipeImage}
             resizeMode="cover"
         />
         <View style={styles.recipeInfo}>
-            <Text style={styles.recipeName}>{item.name}</Text>
+            <Text style={styles.recipeName} numberOfLines={2}>{item.name}</Text>
             <View style={styles.recipeTimeContainer}>
-                <Image source={icons.clock} style={styles.recipeTimeIcon} /> {/* Додай icons.clock */}
+                <Image source={icons.clock} style={styles.recipeTimeIcon} />
                 <Text style={styles.recipeTime}>{item.cookingTime}</Text>
             </View>
         </View>
     </TouchableOpacity>
 );
 
-export default function Index() {
+export default function IndexScreen() { // Перейменовано з Index на IndexScreen для ясності
     const router = useRouter();
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [loading, setLoading] = useState(true);
@@ -62,8 +66,8 @@ export default function Index() {
             setLoading(true);
             const subscriber = firestore()
                 .collection("recipes")
-                .where("userId", "==", currentUser.uid) // Отримуємо рецепти тільки цього користувача
-                .orderBy("createdAt", "desc") // Сортуємо за датою створення (новіші зверху)
+                .where("userId", "==", currentUser.uid)
+                .orderBy("createdAt", "desc")
                 .onSnapshot(
                     (querySnapshot) => {
                         const userRecipes: Recipe[] = [];
@@ -71,7 +75,7 @@ export default function Index() {
                             querySnapshot.forEach((documentSnapshot) => {
                                 userRecipes.push({
                                     id: documentSnapshot.id,
-                                    ...(documentSnapshot.data() as Omit<Recipe, 'id'>), // Приведення типу
+                                    ...(documentSnapshot.data() as Omit<Recipe, 'id'>),
                                 });
                             });
                         }
@@ -81,36 +85,36 @@ export default function Index() {
                     (error) => {
                         console.error("Error fetching user recipes: ", error);
                         setLoading(false);
-                        // Тут можна показати Alert або повідомлення про помилку
+                        // Alert.alert("Помилка", "Не вдалося завантажити ваші рецепти.");
                     }
                 );
-
-            // Відписатися від слухача при розмонтуванні компонента
             return () => subscriber();
         } else {
-            // Якщо користувач не залогінений (хоча логіка в _layout.tsx має це обробляти)
             setRecipes([]);
             setLoading(false);
         }
-    }, [currentUser]); // Перезавантажувати, якщо змінився користувач
+    }, [currentUser]);
 
-    // Фільтрація рецептів на основі пошукового запиту
     const filteredRecipes = useMemo(() => {
         if (!searchQuery) {
             return recipes;
         }
-        return recipes.filter((recipe) =>
-            recipe.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        const lowerCaseQuery = searchQuery.toLowerCase();
+        return recipes.filter((recipe) => {
+            const nameMatch = recipe.name.toLowerCase().includes(lowerCaseQuery);
+            const ingredientsMatch = recipe.ingredients.toLowerCase().includes(lowerCaseQuery); // <--- ДОДАНО ПОШУК ПО ІНГРЕДІЄНТАХ
+            return nameMatch || ingredientsMatch;
+        });
     }, [recipes, searchQuery]);
 
     const handleRecipePress = (recipeId: string) => {
-        router.push(`/meals/${recipeId}`); // Перехід на екран деталей рецепту
+        router.push(`/meals/${recipeId}`);
     };
 
-    if (loading && recipes.length === 0) { // Показуємо індикатор, тільки якщо ще не завантажено жодного рецепту
+    // Показуємо індикатор завантаження, тільки якщо список ще порожній і йде завантаження
+    if (loading && recipes.length === 0) {
         return (
-            <View style={[styles.containerCentered, {backgroundColor: '#0f0D23'}]}>
+            <View style={styles.containerCentered}>
                 <ActivityIndicator size="large" color="#FFFFFF" />
             </View>
         );
@@ -118,55 +122,59 @@ export default function Index() {
 
     return (
         <View style={styles.mainContainer}>
-            {/* Фонове зображення, якщо потрібно, як у тебе було */}
             {/* <Image source={images.bg} style={styles.backgroundImage} /> */}
 
             <FlatList
                 data={filteredRecipes}
                 keyExtractor={(item) => item.id}
-                numColumns={2} // Для відображення у дві колонки, як на макеті (перший ряд)
-                // Якщо хочеш різний вигляд (горизонтальний скрол для "Featured", потім сітка),
-                // то потрібен буде більш складний макет з кількома FlatList або SectionList.
-                // Для початку зробимо просту сітку.
+                numColumns={2}
                 renderItem={({ item }) => (
                     <RecipeCardItem item={item} onPress={() => handleRecipePress(item.id)} />
                 )}
-                ListHeaderComponent={ // Компоненти, які будуть над списком
+                ListHeaderComponent={
                     <>
-                        <Image
-                            source={icons.logo} // Твій логотип
-                            style={styles.logo}
-                            resizeMode="contain"
-                        />
-                        {/* Використовуй свій компонент SearchBar, якщо він готовий, або цей приклад */}
-                        <View style={styles.searchBarContainer}>
-                            <Image source={icons.search} style={styles.searchIcon} />{/* Іконка пошуку */}
-                            <TextInput
-                                style={styles.searchInput}
-                                placeholder="Search through your meals..."
-                                placeholderTextColor="#A8B5DB"
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
+                        <View style={styles.headerContentContainer}>
+                            <Image
+                                source={icons.logo}
+                                style={styles.logo}
+                                resizeMode="contain"
                             />
+                            <View style={styles.searchBarContainer}>
+                                <Image source={icons.search} style={styles.searchIcon} />
+                                <TextInput
+                                    style={styles.searchInput}
+                                    placeholder="Пошук ваших рецептів..." // <--- ОНОВЛЕНО ПЛЕЙСХОЛДЕР
+                                    placeholderTextColor="#A8B5DB"
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                />
+                            </View>
                         </View>
-
-                        {filteredRecipes.length > 0 && (
-                            <Text style={styles.sectionTitle}>My Recipes</Text>
+                        {/* Заголовок секції показуємо тільки якщо є відфільтровані рецепти АБО немає пошукового запиту і є рецепти */}
+                        {(filteredRecipes.length > 0 || (!searchQuery && recipes.length > 0)) && (
+                            <Text style={styles.sectionTitle}>Мої рецепти</Text>
                         )}
                     </>
                 }
-                ListEmptyComponent={ // Якщо список порожній
-                    !loading ? ( // Показуємо тільки якщо не йде завантаження
+                ListEmptyComponent={
+                    !loading ? (
                         <View style={styles.emptyContainer}>
-                            <Image source={icons.logo} style={styles.emptyIcon} /> {/* Додай icons.notFound */}
+                            <Image source={searchQuery ? icons.notFound : icons.empty_recipes_folder} // Різні іконки для "не знайдено" і "немає рецептів"
+                                   style={styles.emptyIcon}
+                                   resizeMode="contain"
+                            />
                             <Text style={styles.emptyText}>
-                                You haven't added any recipes yet.
+                                {searchQuery
+                                    ? "За вашим запитом нічого не знайдено."
+                                    : "У вас ще немає створених рецептів."}
                             </Text>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/add')} style={styles.addButton}>
-                                <Text style={styles.addButtonText}>Add Your First Recipe</Text>
-                            </TouchableOpacity>
+                            {!searchQuery && ( // Кнопку "Додати" показуємо тільки якщо це не результат пошуку
+                                <TouchableOpacity onPress={() => router.push('/(tabs)/add')} style={styles.addButton}>
+                                    <Text style={styles.addButtonText}>Створити перший рецепт</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
-                    ) : null // Або індикатор завантаження, якщо loading все ще true
+                    ) : null
                 }
                 contentContainerStyle={styles.listContentContainer}
                 showsVerticalScrollIndicator={false}
@@ -175,29 +183,32 @@ export default function Index() {
     );
 }
 
-// Стилі, наближені до макету (темна тема)
 const styles = StyleSheet.create({
     mainContainer: {
         flex: 1,
-        backgroundColor: "#0f0D23", // Основний темний фон, як на макеті
+        backgroundColor: "#0f0D23",
     },
-    backgroundImage: { // Якщо будеш використовувати фонове зображення
-        position: "absolute",
-        width: "100%",
-        height: "100%",
-        zIndex: 0,
+    // backgroundImage: { ... }, // Якщо потрібне фонове зображення
+    containerCentered: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#0f0D23', // Додав фон для консистентності
+    },
+    headerContentContainer: { // Новий контейнер для лого та пошуку, щоб застосувати відступи
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 60,
     },
     logo: {
-        width: 50, // Налаштуй розміри
+        width: 50,
         height: 40,
-        marginTop: 60, // Відступ зверху (враховуй статус-бар)
+        // marginTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 + 20 : 60, // Перенесено до headerContentContainer
         marginBottom: 20,
         alignSelf: "center",
     },
     searchBarContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1E1C32', // Темний фон для поля пошуку
+        backgroundColor: '#1E1C32',
         borderRadius: 12,
         paddingHorizontal: 15,
         marginHorizontal: 20,
@@ -207,35 +218,35 @@ const styles = StyleSheet.create({
     searchIcon: {
         width: 20,
         height: 20,
-        tintColor: '#A8B5DB', // Колір іконки
+        tintColor: '#A8B5DB',
         marginRight: 10,
     },
     searchInput: {
         flex: 1,
         fontSize: 16,
-        color: "#FFFFFF", // Колір тексту в полі пошуку
+        color: "#FFFFFF",
     },
     sectionTitle: {
         fontSize: 20,
         fontWeight: "bold",
         color: "#FFFFFF",
-        marginLeft: 20,
+        marginLeft: 20, // Або 20, якщо відступ контейнера 12
         marginBottom: 10,
     },
     listContentContainer: {
-        paddingHorizontal: 12, // Відступи для сітки карток
-        paddingBottom: 80, // Щоб останній ряд не перекривався таб-баром
+        paddingHorizontal: 12,
+        paddingBottom: 90, // Збільшив відступ знизу через TabBar
     },
     recipeCard: {
-        flex: 1, // Для рівномірного розподілу в numColumns
+        flex: 1,
         margin: 8,
-        backgroundColor: "#1E1C32", // Фон картки
+        backgroundColor: "#1E1C32",
         borderRadius: 15,
-        overflow: "hidden", // Щоб зображення не виходило за межі
+        overflow: "hidden",
     },
     recipeImage: {
         width: "100%",
-        height: 130, // Висота зображення в картці
+        height: 130,
     },
     recipeInfo: {
         padding: 12,
@@ -258,23 +269,19 @@ const styles = StyleSheet.create({
     },
     recipeTime: {
         fontSize: 12,
-        color: "#A8B5DB", // Колір тексту часу
-    },
-    containerCentered: { // Для індикатора завантаження
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
+        color: "#A8B5DB",
     },
     emptyContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: 50, // Відступ, щоб було по центру
+        paddingHorizontal: 20,
+        marginTop: 30, // Відступ зверху, якщо список порожній
     },
     emptyIcon: {
-        width: 100,
-        height: 100,
-        tintColor: '#A8B5DB', // Або інший колір
+        width: 80, // Зробив трохи менше
+        height: 80,
+        tintColor: '#A8B5DB',
         marginBottom: 20,
     },
     emptyText: {
@@ -284,7 +291,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     addButton: {
-        backgroundColor: '#C37AFF', // Колір кнопки, як у тебе на Add табі
+        backgroundColor: '#C37AFF',
         paddingVertical: 12,
         paddingHorizontal: 25,
         borderRadius: 25,
