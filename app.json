@@ -14,7 +14,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        // "softwareKeyboardLayoutMode": "pan"
       },
       "googleServicesFile": "./google-services.json",
       "package": "com.uniproject.homemenu",
