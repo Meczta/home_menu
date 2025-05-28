@@ -250,7 +250,7 @@ export default function RecipeDetailScreen() {
                                     <ActivityIndicator size="small" color="#C37AFF" />
                                 ) : (
                                     <Image
-                                        source={isCurrentlySaved ? icons.bookmark_saved : icons.bookmark_unsaved}
+                                        source={isCurrentlySaved ? icons.bookmark_saved : icons.save}
                                         style={styles.bookmarkIconInline}
                                     />
                                 )}

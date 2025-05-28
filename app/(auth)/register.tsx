@@ -13,20 +13,31 @@ import {
     Platform,
     ScrollView,
 } from 'react-native';
-import auth from '@react-native-firebase/auth';
-import { useRouter } from 'expo-router'; // Link тут не потрібен, якщо є кнопка "Назад"
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth'; // Імпортуємо FirebaseAuthTypes
+import firestore from '@react-native-firebase/firestore'; // Імпортуємо firestore
+import { useRouter } from 'expo-router';
 import { images } from '@/constants/images';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+// Кольори зі стилю login.tsx для консистентності
+const PRIMARY_BACKGROUND_COLOR = '#0f0D23';
+const INPUT_BACKGROUND_COLOR = '#1E1C32';
+const TEXT_COLOR = '#FFFFFF';
+const PLACEHOLDER_TEXT_COLOR = '#8A8A8D';
+const ACCENT_COLOR = '#C37AFF';
+const DISABLED_ACCENT_COLOR = '#7A5FAB';
+const BORDER_COLOR = '#2C2C2D';
+
 export default function RegisterScreen() {
+    const [displayName, setDisplayName] = useState(''); // <--- НОВИЙ СТАН для імені
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState(''); // Додамо підтвердження пароля
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
     const handleRegister = async () => {
-        if (!email || !password || !confirmPassword) {
+        if (!displayName || !email || !password || !confirmPassword) { // <--- Додано перевірку displayName
             Alert.alert('Помилка', 'Будь ласка, заповніть всі поля.');
             return;
         }
@@ -40,10 +51,30 @@ export default function RegisterScreen() {
         }
         setLoading(true);
         try {
-            await auth().createUserWithEmailAndPassword(email, password);
-            // Після успішної реєстрації Firebase автоматично логінить користувача.
-            // Навігація на головний екран відбудеться автоматично
-            // завдяки логіці в app/_layout.tsx.
+            const userCredential: FirebaseAuthTypes.UserCredential = await auth().createUserWithEmailAndPassword(email, password);
+            const user = userCredential.user;
+
+            if (user) {
+                // 1. Оновлюємо профіль користувача в Firebase Authentication (додаємо displayName)
+                await user.updateProfile({
+                    displayName: displayName,
+                });
+
+                // 2. Створюємо запис про користувача в колекції 'users' у Firestore
+                // Це дозволить зберігати додаткову інформацію про користувача
+                await firestore().collection('users').doc(user.uid).set({
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: displayName,
+                    createdAt: firestore.FieldValue.serverTimestamp(),
+                    // Тут можна буде додати photoURL: null або початкове значення
+                });
+
+                console.log('User account created & signed in! DisplayName set.');
+                // Навігація на головний екран відбудеться автоматично
+                // завдяки логіці в app/_layout.tsx.
+            }
+
         } catch (error: any) {
             let errorMessage = 'Виникла помилка. Спробуйте ще раз.';
             if (error.code === 'auth/email-already-in-use') {
@@ -65,11 +96,20 @@ export default function RegisterScreen() {
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.keyboardAvoidingView}
             >
-                <ScrollView contentContainerStyle={styles.scrollContainer}>
+                <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
                     <View style={styles.container}>
                         <Image source={images.bookRecipe} style={styles.logo} />
                         <Text style={styles.title}>Створити акаунт</Text>
                         <Text style={styles.subtitle}>Приєднуйтесь до нас!</Text>
+
+                        <TextInput // <--- НОВЕ ПОЛЕ для імені
+                            style={styles.input}
+                            placeholder="Ваше ім'я або нікнейм"
+                            value={displayName}
+                            onChangeText={setDisplayName}
+                            autoCapitalize="words" // Перша літера кожного слова велика
+                            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
+                        />
 
                         <TextInput
                             style={styles.input}
@@ -78,7 +118,7 @@ export default function RegisterScreen() {
                             onChangeText={setEmail}
                             keyboardType="email-address"
                             autoCapitalize="none"
-                            placeholderTextColor="#8A8A8D"
+                            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                         />
                         <TextInput
                             style={styles.input}
@@ -86,15 +126,15 @@ export default function RegisterScreen() {
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
-                            placeholderTextColor="#8A8A8D"
+                            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                         />
-                        <TextInput // Поле для підтвердження пароля
+                        <TextInput
                             style={styles.input}
                             placeholder="Підтвердіть пароль"
                             value={confirmPassword}
                             onChangeText={setConfirmPassword}
                             secureTextEntry
-                            placeholderTextColor="#8A8A8D"
+                            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                         />
 
                         <TouchableOpacity
@@ -103,7 +143,7 @@ export default function RegisterScreen() {
                             disabled={loading}
                         >
                             {loading ? (
-                                <ActivityIndicator color="#FFFFFF" />
+                                <ActivityIndicator color={TEXT_COLOR} />
                             ) : (
                                 <Text style={styles.buttonText}>Зареєструватися</Text>
                             )}
@@ -111,8 +151,7 @@ export default function RegisterScreen() {
 
                         <TouchableOpacity
                             style={styles.backButton}
-                            onPress={() => router.replace('/(auth)/login')} // Замінив router.back() на явний перехід
-                            // щоб уникнути проблем, якщо це перший екран
+                            onPress={() => router.replace('/(auth)/login')}
                         >
                             <Text style={styles.backButtonText}>Вже є акаунт? Увійти</Text>
                         </TouchableOpacity>
@@ -127,7 +166,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#0f0D23',
+        backgroundColor: PRIMARY_BACKGROUND_COLOR,
     },
     keyboardAvoidingView: {
         flex: 1,
@@ -137,66 +176,66 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     container: {
-        flex: 1,
+        // flex: 1, // Забираємо flex:1, щоб ScrollView міг скролитися, якщо контенту багато
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 25,
-        paddingBottom: 20,
+        paddingVertical: 20, // Додав вертикальний падінг
     },
     logo: {
-        width: 100,
-        height: 100,
+        width: 80, // Трохи зменшив лого
+        height: 80,
         resizeMode: 'contain',
-        marginBottom: 30,
+        marginBottom: 25, // Зменшив відступ
     },
     title: {
-        fontSize: 28,
+        fontSize: 26, // Трохи зменшив
         fontWeight: 'bold',
-        color: '#FFFFFF',
+        color: TEXT_COLOR,
         textAlign: 'center',
-        marginBottom: 10,
+        marginBottom: 8, // Зменшив
     },
     subtitle: {
-        fontSize: 16,
-        color: '#A8B5DB',
+        fontSize: 15, // Трохи зменшив
+        color: PLACEHOLDER_TEXT_COLOR, // Використовуємо константу
         textAlign: 'center',
-        marginBottom: 40,
+        marginBottom: 30, // Зменшив
     },
     input: {
         width: '100%',
         height: 50,
-        backgroundColor: '#1E1C32',
+        backgroundColor: INPUT_BACKGROUND_COLOR,
         borderRadius: 12,
         paddingHorizontal: 15,
         fontSize: 16,
-        color: '#FFFFFF',
-        marginBottom: 20,
+        color: TEXT_COLOR,
+        marginBottom: 18, // Зменшив
         borderWidth: 1,
-        borderColor: '#2C2C2D',
+        borderColor: BORDER_COLOR,
     },
     button: {
         width: '100%',
         height: 50,
-        backgroundColor: '#C37AFF',
+        backgroundColor: ACCENT_COLOR,
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 12,
-        marginTop: 10,
+        marginTop: 10, // Зменшив
     },
     buttonDisabled: {
-        backgroundColor: '#7A5FAB',
+        backgroundColor: DISABLED_ACCENT_COLOR,
     },
     buttonText: {
-        color: '#FFFFFF',
+        color: TEXT_COLOR,
         fontSize: 18,
         fontWeight: 'bold',
     },
-    backButton: { // Стиль для кнопки "Назад до входу"
-        marginTop: 30,
+    backButton: {
+        marginTop: 25, // Зменшив
     },
     backButtonText: {
         fontSize: 14,
-        color: '#C37AFF',
+        color: ACCENT_COLOR,
         fontWeight: 'bold',
     },
 });

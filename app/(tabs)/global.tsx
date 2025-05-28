@@ -1,4 +1,4 @@
-// app/(tabs)/search.tsx
+// app/(tabs)/global.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import {
     Image,
@@ -93,7 +93,7 @@ export default function SearchScreen() { // Перейменовано з Search
             (error) => {
                 console.error("Error fetching public recipes: ", error);
                 setLoading(false);
-                Alert.alert("Помилка", "Не вдалося завантажити рецепти.");
+                // Alert.alert("Помилка", "Не вдалося завантажити рецепти.");
             }
         );
 

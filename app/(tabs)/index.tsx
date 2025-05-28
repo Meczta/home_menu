@@ -36,7 +36,7 @@ interface Recipe {
 
 // Компонент картки рецепту
 // РЕКОМЕНДАЦІЯ: Винеси цей компонент в окремий файл (наприклад, components/RecipeCardItem.tsx)
-// та імпортуй його сюди і в search.tsx, щоб уникнути дублювання.
+// та імпортуй його сюди і в global.tsx, щоб уникнути дублювання.
 const RecipeCardItem = ({ item, onPress }: { item: Recipe; onPress: () => void }) => (
     <TouchableOpacity onPress={onPress} style={styles.recipeCard}>
         <Image
