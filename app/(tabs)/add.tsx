@@ -13,7 +13,7 @@ import {
     ActivityIndicator,
     Switch,
     StatusBar,
-    KeyboardAvoidingView, // Додано KeyboardAvoidingView
+    KeyboardAvoidingView,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -21,13 +21,25 @@ import storage from '@react-native-firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 
-// Колірна схема
-const PRIMARY_BACKGROUND_COLOR = '#1A2035'; // Темно-синьо-фіолетовий
-const INPUT_BACKGROUND_COLOR = '#2A3045';   // Трохи світліший для полів
-const TEXT_COLOR_ON_DARK = '#FFFFFF';       // Білий текст
-const PLACEHOLDER_TEXT_COLOR = '#A0A0B0';   // Світло-сірий для плейсхолдерів
-const ACCENT_COLOR_BUTTON = '#7E57C2';       // Фіолетовий для кнопки "Додати"
-const ACCENT_COLOR_SWITCH = '#9575CD';      // Світліший фіолетовий для Switch
+// Колірна схема (залишається як була)
+const PRIMARY_BACKGROUND_COLOR = '#1A2035';
+const INPUT_BACKGROUND_COLOR = '#2A3045';
+const TEXT_COLOR_ON_DARK = '#FFFFFF';
+const PLACEHOLDER_TEXT_COLOR = '#A0A0B0';
+const ACCENT_COLOR_BUTTON = '#7E57C2';
+const ACCENT_COLOR_SWITCH = '#9575CD';
+const TAG_BACKGROUND_COLOR = '#3A3F5E'; // Колір для неактивного тегу
+const TAG_BACKGROUND_COLOR_SELECTED = ACCENT_COLOR_SWITCH; // Колір для активного тегу
+const TAG_TEXT_COLOR = '#E0E0E0';
+const TAG_TEXT_COLOR_SELECTED = '#FFFFFF';
+
+// Список доступних тегів
+const AVAILABLE_TAGS = [
+    "десерт", "суп", "випічка", "закуска",
+    "солоне", "солодке", "кисле",
+    "сніданок", "обід", "вечеря",
+    "варене", "здорове харчування", "напої"
+];
 
 export default function AddRecipeScreen() {
     const [name, setName] = useState('');
@@ -35,7 +47,8 @@ export default function AddRecipeScreen() {
     const [ingredients, setIngredients] = useState('');
     const [description, setDescription] = useState('');
     const [imageUri, setImageUri] = useState<string | null>(null);
-    const [isPublic, setIsPublic] = useState(false); // За замовчуванням НЕ публічний
+    const [isPublic, setIsPublic] = useState(false);
+    const [selectedTags, setSelectedTags] = useState<string[]>([]); // <--- НОВИЙ СТАН для вибраних тегів
     const [uploading, setUploading] = useState(false);
 
     const router = useRouter();
@@ -50,7 +63,6 @@ export default function AddRecipeScreen() {
             }
         })();
     }, []);
-
     const pickImage = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -64,6 +76,14 @@ export default function AddRecipeScreen() {
         }
     };
 
+    const handleToggleTag = (tag: string) => {
+        setSelectedTags(prevTags =>
+            prevTags.includes(tag)
+                ? prevTags.filter(t => t !== tag) // Видалити тег, якщо він вже вибраний
+                : [...prevTags, tag] // Додати тег, якщо його немає
+        );
+    };
+
     const handleAddRecipe = async () => {
         const currentUser = auth().currentUser;
         if (!currentUser) {
@@ -74,6 +94,8 @@ export default function AddRecipeScreen() {
             Alert.alert('Помилка', 'Будь ласка, заповніть всі обов\'язкові поля.');
             return;
         }
+        // Можна додати перевірку на кількість вибраних тегів, якщо потрібно
+
         setUploading(true);
         let uploadedImageUrl: string | null = null;
         try {
@@ -84,6 +106,7 @@ export default function AddRecipeScreen() {
                 await storageRef.putFile(uploadUri);
                 uploadedImageUrl = await storageRef.getDownloadURL();
             }
+
             await firestore().collection('recipes').add({
                 name,
                 cookingTime,
@@ -92,15 +115,19 @@ export default function AddRecipeScreen() {
                 imageUrl: uploadedImageUrl,
                 userId: currentUser.uid,
                 isPublic,
+                tags: selectedTags, // <--- ДОДАЄМО ТЕГИ ДО ОБ'ЄКТУ РЕЦЕПТУ
                 createdAt: firestore.FieldValue.serverTimestamp(),
             });
+
             Alert.alert('Успіх!', 'Рецепт успішно додано.');
+            // Очищення форми
             setName('');
             setCookingTime('');
             setIngredients('');
             setDescription('');
             setImageUri(null);
             setIsPublic(false);
+            setSelectedTags([]); // <--- Очищуємо вибрані теги
         } catch (error: any) {
             console.error("Error adding recipe: ", error);
             Alert.alert('Помилка додавання', error.message || 'Не вдалося додати рецепт.');
@@ -113,15 +140,10 @@ export default function AddRecipeScreen() {
         <KeyboardAvoidingView
             style={styles.keyboardAvoidingContainer}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            // keyboardVerticalOffset можна налаштувати, якщо заголовок або TabBar заважають
-            // Наприклад, якщо є стандартний заголовок React Navigation:
-            // keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
-            // (де headerHeight потрібно отримати, наприклад, з useHeaderHeight())
-            // Для простоти, почнемо без нього, або з невеликим значенням.
             keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
         >
             <ScrollView
-                style={styles.scrollContainerStyle} // Додав окремий стиль для ScrollView
+                style={styles.scrollContainerStyle}
                 contentContainerStyle={styles.contentContainer}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
@@ -136,38 +158,34 @@ export default function AddRecipeScreen() {
                     )}
                 </TouchableOpacity>
 
-                <TextInput
-                    style={styles.input}
-                    placeholder="Назва рецепту"
-                    placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-                    value={name}
-                    onChangeText={setName}
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Час приготування (наприклад, 30 хв)"
-                    placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-                    value={cookingTime}
-                    onChangeText={setCookingTime}
-                />
-                <TextInput
-                    style={[styles.input, styles.multilineInput]}
-                    placeholder="Інгредієнти (через кому або кожен з нового рядка)"
-                    placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-                    value={ingredients}
-                    onChangeText={setIngredients}
-                    multiline
-                    numberOfLines={4}
-                />
-                <TextInput
-                    style={[styles.input, styles.multilineInput]}
-                    placeholder="Опис приготування"
-                    placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-                    value={description}
-                    onChangeText={setDescription}
-                    multiline
-                    numberOfLines={6}
-                />
+                <TextInput style={styles.input} placeholder="Назва рецепту" value={name} onChangeText={setName} placeholderTextColor={PLACEHOLDER_TEXT_COLOR}/>
+                <TextInput style={styles.input} placeholder="Час приготування (наприклад, 30 хв)" value={cookingTime} onChangeText={setCookingTime} placeholderTextColor={PLACEHOLDER_TEXT_COLOR}/>
+                <TextInput style={[styles.input, styles.multilineInput]} placeholder="Інгредієнти..." value={ingredients} onChangeText={setIngredients} multiline numberOfLines={4} placeholderTextColor={PLACEHOLDER_TEXT_COLOR}/>
+                <TextInput style={[styles.input, styles.multilineInput]} placeholder="Опис приготування" value={description} onChangeText={setDescription} multiline numberOfLines={6} placeholderTextColor={PLACEHOLDER_TEXT_COLOR}/>
+
+                {/* Секція для вибору тегів */}
+                <Text style={styles.sectionTitle}>Теги (оберіть декілька):</Text>
+                <View style={styles.tagsContainer}>
+                    {AVAILABLE_TAGS.map(tag => (
+                        <TouchableOpacity
+                            key={tag}
+                            style={[
+                                styles.tagButton,
+                                selectedTags.includes(tag) && styles.tagButtonSelected
+                            ]}
+                            onPress={() => handleToggleTag(tag)}
+                        >
+                            <Text
+                                style={[
+                                    styles.tagText,
+                                    selectedTags.includes(tag) && styles.tagTextSelected
+                                ]}
+                            >
+                                {tag}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
 
                 <View style={styles.switchContainer}>
                     <Text style={styles.switchLabel}>Зробити рецепт публічним?</Text>
@@ -197,13 +215,9 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: PRIMARY_BACKGROUND_COLOR,
     },
-    scrollContainerStyle: { // Стиль для ScrollView, якщо потрібен
-        flex: 1, // Може бути не потрібним, якщо keyboardAvoidingContainer вже flex: 1
+    scrollContainerStyle: {
+        flex: 1,
     },
-    // container: { // Старий стиль для ScrollView, властивості перенесено або не потрібні
-    //     flex: 1,
-    //     backgroundColor: PRIMARY_BACKGROUND_COLOR,
-    // },
     contentContainer: {
         paddingHorizontal: 25,
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 60,
@@ -215,6 +229,13 @@ const styles = StyleSheet.create({
         color: TEXT_COLOR_ON_DARK,
         textAlign: 'center',
         marginBottom: 25,
+    },
+    sectionTitle: { // Стиль для заголовка секції тегів
+        fontSize: 18,
+        fontWeight: '600',
+        color: TEXT_COLOR_ON_DARK,
+        marginTop: 15,
+        marginBottom: 10,
     },
     input: {
         backgroundColor: INPUT_BACKGROUND_COLOR,
@@ -251,6 +272,33 @@ const styles = StyleSheet.create({
         height: '100%',
         borderRadius: 11,
     },
+    tagsContainer: { // Контейнер для всіх тегів
+        flexDirection: 'row', // Розміщуємо теги в рядок
+        flexWrap: 'wrap',     // Дозволяємо переноситися на новий рядок
+        marginBottom: 20,
+    },
+    tagButton: { // Стиль для кнопки тегу
+        backgroundColor: TAG_BACKGROUND_COLOR,
+        paddingVertical: 8,
+        paddingHorizontal: 15,
+        borderRadius: 20, // Робимо їх схожими на "чіпси"
+        marginRight: 8,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: ACCENT_COLOR_SWITCH,
+    },
+    tagButtonSelected: { // Стиль для вибраного тегу
+        backgroundColor: TAG_BACKGROUND_COLOR_SELECTED,
+        borderColor: TAG_BACKGROUND_COLOR_SELECTED,
+    },
+    tagText: {
+        color: TAG_TEXT_COLOR,
+        fontSize: 14,
+    },
+    tagTextSelected: {
+        color: TAG_TEXT_COLOR_SELECTED,
+        fontWeight: 'bold',
+    },
     switchContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -279,7 +327,7 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     addButtonText: {
-        color: TEXT_COLOR_ON_DARK, // Якщо кнопка світла, текст може бути темнішим
+        color: TEXT_COLOR_ON_DARK,
         fontSize: 18,
         fontWeight: '600',
     },

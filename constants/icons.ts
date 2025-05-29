@@ -12,6 +12,8 @@ import bookmark_saved from "@/assets/icons/bookmark_saved.png";
 import bookmark_unsaved from "@/assets/icons/bookmark_unsaved.png";
 import notFound from "@/assets/icons/notFound.png";
 import empty_recipes_folder from "@/assets/icons/empty_recipes_folder.png";
+import camera from "@/assets/icons/camera.png";
+import edit from "@/assets/icons/edit.png";
 
 export const icons = {
   home,
@@ -28,4 +30,6 @@ export const icons = {
   bookmark_unsaved,
   notFound,
   empty_recipes_folder,
+  camera,
+  edit,
 };
