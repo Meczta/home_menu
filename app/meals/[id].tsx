@@ -11,14 +11,12 @@ import {
     Alert,
     Switch,
     Platform,
-    StatusBar, // Імпортуємо для StatusBar.currentHeight
+    StatusBar,
 } from 'react-native';
-// SafeAreaView може бути корисним, якщо проблеми зі статус-баром залишаються
-// import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
-import { icons } from '@/constants/icons'; // Переконайся, що тут є dots, bookmark_saved, bookmark_unsaved
+import { icons } from '@/constants/icons';
 import { images } from '@/constants/images';
 import storage from "@react-native-firebase/storage";
 
@@ -32,6 +30,7 @@ interface Recipe {
     userId: string;
     isPublic: boolean;
     createdAt?: FirebaseFirestoreTypes.Timestamp;
+    tags?: string[];
 }
 
 export default function RecipeDetailScreen() {
@@ -106,65 +105,52 @@ export default function RecipeDetailScreen() {
         }
     }, [currentUser, recipeId]);
 
-    const handleDeleteRecipe = async () => { /* ...твій код видалення, як був ... */
+    const handleDeleteRecipe = async () => {
         if (!recipe || !isOwner || !currentUser) return;
         setShowMenu(false);
         Alert.alert(
-            'Видалити рецепт',
-            `Ви впевнені, що хочете видалити рецепт "${recipe.name}"?`,
-            [
-                { text: 'Скасувати', style: 'cancel' },
-                {
-                    text: 'Видалити',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            const bookmarksQuerySnapshot = await firestore()
-                                .collection('user_bookmarks')
-                                .where('recipeId', '==', recipe.id)
-                                .get();
-                            const batch = firestore().batch();
-                            bookmarksQuerySnapshot.forEach(doc => {
-                                batch.delete(doc.ref);
-                            });
-                            await batch.commit();
-
-                            if (recipe.imageUrl) {
-                                try {
-                                    const storageRef = storage().refFromURL(recipe.imageUrl);
-                                    await storageRef.delete();
-                                } catch (storageError: any) {
-                                    if (storageError.code !== 'storage/object-not-found') {
-                                        console.error("Error deleting image from storage: ", storageError);
-                                    }
+            'Видалити рецепт', `Ви впевнені, що хочете видалити рецепт "${recipe.name}"?`,
+            [{ text: 'Скасувати', style: 'cancel' }, {
+                text: 'Видалити', style: 'destructive',
+                onPress: async () => {
+                    try {
+                        const bookmarksQuerySnapshot = await firestore().collection('user_bookmarks').where('recipeId', '==', recipe.id).get();
+                        const batch = firestore().batch();
+                        bookmarksQuerySnapshot.forEach(doc => { batch.delete(doc.ref); });
+                        await batch.commit();
+                        if (recipe.imageUrl) {
+                            try {
+                                const storageRef = storage().refFromURL(recipe.imageUrl);
+                                await storageRef.delete();
+                            } catch (storageError: any) {
+                                if (storageError.code !== 'storage/object-not-found') {
+                                    console.error("Error deleting image from storage: ", storageError);
                                 }
                             }
-                            await firestore().collection('recipes').doc(recipe.id).delete();
-                            Alert.alert('Успіх', 'Рецепт видалено.');
-                            router.back();
-                        } catch (error: any) {
-                            console.error('Error deleting recipe: ', error);
-                            Alert.alert('Помилка', 'Не вдалося видалити рецепт.');
                         }
-                    },
+                        await firestore().collection('recipes').doc(recipe.id).delete();
+                        Alert.alert('Успіх', 'Рецепт видалено.');
+                        router.back();
+                    } catch (error: any) {
+                        console.error('Error deleting recipe: ', error);
+                        Alert.alert('Помилка', 'Не вдалося видалити рецепт.');
+                    }
                 },
-            ]
+            }]
         );
     };
-    const toggleIsPublic = async () => { /* ...твій код зміни публічності, як був ... */
+    const toggleIsPublic = async () => {
         if (!recipe || !isOwner || !currentUser) return;
         const newIsPublicStatus = !recipe.isPublic;
         try {
-            await firestore().collection('recipes').doc(recipe.id).update({
-                isPublic: newIsPublicStatus,
-            });
+            await firestore().collection('recipes').doc(recipe.id).update({ isPublic: newIsPublicStatus });
             Alert.alert('Статус оновлено', `Рецепт тепер ${newIsPublicStatus ? 'публічний' : 'приватний'}.`);
         } catch (error: any) {
             console.error('Error updating isPublic status: ', error);
             Alert.alert('Помилка', 'Не вдалося оновити статус публічності.');
         }
     };
-    const handleToggleBookmark = async () => { /* ...твій код збереження/видалення закладки, як був ... */
+    const handleToggleBookmark = async () => {
         if (!currentUser || !recipeId || isSavingBookmark) return;
         setIsSavingBookmark(true);
         const bookmarkDocId = `${currentUser.uid}_${recipeId}`;
@@ -201,8 +187,7 @@ export default function RecipeDetailScreen() {
         headerStyle: { backgroundColor: '#0f0D23' },
         headerTintColor: '#FFFFFF',
         headerBackTitleVisible: false,
-        headerTransparent: false,
-        // Збільшуємо відступи для кнопок в заголовку, щоб вони точно не налізали
+        headerTransparent: false, // Важливо для правильного відступу контенту
         headerRightContainerStyle: { paddingRight: 15 },
         headerLeftContainerStyle: { paddingLeft: 10 },
         headerRight: () => (
@@ -230,7 +215,7 @@ export default function RecipeDetailScreen() {
                 contentContainerStyle={styles.scrollContentContainer}
                 showsVerticalScrollIndicator={false}
             >
-                <Image // Тепер це просто Image, а не ImageBackground
+                <Image // Тепер це знову просто Image
                     source={recipe.imageUrl ? { uri: recipe.imageUrl } : images.placeholder}
                     style={styles.recipeImage}
                     resizeMode="cover"
@@ -268,6 +253,19 @@ export default function RecipeDetailScreen() {
                     <Text style={styles.sectionHeader}>Час приготування</Text>
                     <Text style={styles.infoText}>{recipe.cookingTime}</Text>
 
+                    {recipe.tags && recipe.tags.length > 0 && (
+                        <>
+                            <Text style={styles.sectionHeader}>Теги</Text>
+                            <View style={styles.tagsDisplayContainer}>
+                                {recipe.tags.map((tag, index) => (
+                                    <View key={index} style={styles.tagChip}>
+                                        <Text style={styles.tagChipText}>{tag}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </>
+                    )}
+
                     <Text style={styles.sectionHeader}>Опис приготування</Text>
                     <Text style={styles.descriptionText}>{recipe.description}</Text>
 
@@ -297,10 +295,7 @@ const styles = StyleSheet.create({
     mainContainer: {
         flex: 1,
         backgroundColor: '#0f0D23',
-        // Важливо: Якщо заголовок не прозорий, SafeAreaView для основного контейнера може не знадобитися,
-        // оскільки сам заголовок вже враховує статус-бар.
-        // Якщо ж проблеми залишаються, можна обгорнути View в SafeAreaView.
-        // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, // Альтернатива для Android
+        // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, // ПРИБРАНО ЗВІДСИ, бо заголовок непрозорий
     },
     loadingContainer: {
         flex: 1,
@@ -309,7 +304,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#0f0D23',
     },
     headerButton: {
-        paddingHorizontal: 8, // Змінив на горизонтальний для кращої області кліку
+        paddingHorizontal: 8,
     },
     headerIcon: {
         width: 24,
@@ -318,7 +313,10 @@ const styles = StyleSheet.create({
     },
     optionsMenu: {
         position: 'absolute',
-        top: (Platform.OS === 'ios' ? 40 : (StatusBar.currentHeight || 0) + 10) + 45, // Приблизна висота заголовка + відступ
+        // Приблизна висота стандартного заголовка (враховуючи статус-бар) ~56-60 для Android, ~90 для iOS з великим заголовком.
+        // Якщо заголовок стандартний, то відступ має бути від його нижнього краю.
+        // Спробуємо встановити відносно невеликий відступ, припускаючи, що сам заголовок вже має правильну висоту.
+        top: Platform.OS === 'ios' ? 50 : 50, // Зменшив, бо заголовок непрозорий і має відступ
         right: 15,
         backgroundColor: '#1E1C32',
         borderRadius: 8,
@@ -337,43 +335,43 @@ const styles = StyleSheet.create({
     scrollContentContainer: {
         paddingBottom: 30,
     },
-    recipeImage: { // Змінено з recipeImageContainer, тепер це просто Image
+    recipeImage: {
         width: '100%',
-        height: 300, // Можеш налаштувати висоту
+        height: 300,
+        resizeMode: 'cover',
     },
     contentContainer: {
         paddingHorizontal: 20,
-        paddingTop: 20, // Відступ зверху для контенту під зображенням
+        paddingTop: 20, // Відступ зверху для назви та іншого контенту
         backgroundColor: '#0f0D23',
     },
-    titleBookmarkRow: { // Новий стиль для рядка з назвою та кнопкою збереження
+    titleBookmarkRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20, // Відступ під цим рядком
+        justifyContent: 'space-between', // Розміщує назву зліва, кнопку справа
+        alignItems: 'center',      // Вирівнює по центру вертикалі
+        marginBottom: 20,
     },
     recipeTitle: {
-        fontSize: 26, // Трохи зменшив, щоб помістилася кнопка
+        fontSize: 26,
         fontWeight: 'bold',
         color: '#FFFFFF',
-        flex: 1, // Дозволяє тексту зайняти доступний простір, відсуваючи кнопку вправо
+        flex: 1, // Дозволяє назві зайняти доступний простір
         marginRight: 10, // Відступ від кнопки збереження
-        textAlign: 'left', // Вирівнювання зліва
+        textAlign: 'left',
     },
     bookmarkButtonInline: { // Стиль для кнопки збереження поруч з назвою
-        padding: 8,
+        padding: 8, // Область натискання
     },
     bookmarkIconInline: { // Стиль для іконки збереження поруч з назвою
-        width: 28, // Розмір іконки
+        width: 28,
         height: 28,
-        // tintColor можна задати тут, якщо іконки одноколірні:
-        // tintColor: isCurrentlySaved ? '#C37AFF' : '#FFFFFF',
+        // tintColor: isCurrentlySaved ? '#C37AFF' : '#FFFFFF', // Якщо потрібен tintColor
     },
     sectionHeader: {
         fontSize: 20,
         fontWeight: '600',
         color: '#FFFFFF',
-        marginTop: 20, // Зменшив верхній відступ
+        marginTop: 20,
         marginBottom: 10,
     },
     ingredientsBox: {
@@ -393,6 +391,25 @@ const styles = StyleSheet.create({
         color: '#E0E0E0',
         marginBottom: 15,
         lineHeight: 24,
+    },
+    tagsDisplayContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginBottom: 15,
+    },
+    tagChip: {
+        backgroundColor: '#2A3045',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 15,
+        marginRight: 8,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#9575CD',
+    },
+    tagChipText: {
+        color: '#E0E0E0',
+        fontSize: 14,
     },
     descriptionText: {
         fontSize: 16,
