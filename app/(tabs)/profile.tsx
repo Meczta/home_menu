@@ -74,7 +74,7 @@ export default function ProfileScreen() {
 
         } catch (error) {
             console.error("Error fetching user data or recipe count: ", error);
-            Alert.alert("Помилка", "Не вдалося завантажити дані профілю.");
+            // Alert.alert("Помилка", "Не вдалося завантажити дані профілю.");
         } finally {
             setLoading(false);
         }

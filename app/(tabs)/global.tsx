@@ -1,5 +1,5 @@
-// app/(tabs)/global.tsx
-import React, { useState, useEffect, useMemo } from "react";
+// app/(tabs)/global.tsx (або search.tsx, якщо ти його ще не перейменувала)
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
     Image,
     Text,
@@ -8,17 +8,39 @@ import {
     ActivityIndicator,
     StyleSheet,
     TouchableOpacity,
-    TextInput, Platform, Alert, // Додамо TextInput для пошуку
+    TextInput,
+    Platform,
+    StatusBar,
+    Alert,
+    ScrollView, // Для тегів
 } from "react-native";
-import { images } from "@/constants/images"; // Переконайся, що шляхи правильні
-import { icons } from "@/constants/icons";   // Переконайся, що шляхи правильні
-// Якщо ти використовуєш свій компонент SearchBar, імпортуй його
-// import SearchBar from "@/components/SearchBar";
+import { images } from "@/constants/images";
+import { icons } from "@/constants/icons";
 import { useRouter } from "expo-router";
-import auth from "@react-native-firebase/auth";
+import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
 import firestore, { FirebaseFirestoreTypes } from "@react-native-firebase/firestore";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Тип для рецепту (такий самий, як в index.tsx)
+// Список доступних тегів (такий самий, як на сторінці додавання)
+const AVAILABLE_TAGS = [
+    "десерт", "суп", "випічка", "закуска",
+    "солоне", "солодке", "кисле",
+    "сніданок", "обід", "вечеря",
+    "варене", "здорове харчування", "напої"
+];
+
+// Кольори для тегів (можна винести в constants/colors.ts)
+const TAG_BACKGROUND_COLOR = '#2A3045';
+const TAG_BACKGROUND_COLOR_SELECTED = '#7E57C2';
+const TAG_TEXT_COLOR = '#A0A0B0';
+const TAG_TEXT_COLOR_SELECTED = '#FFFFFF';
+
+interface UserData { // Тип для даних автора
+    uid: string;
+    displayName?: string | null;
+    photoURL?: string | null;
+}
+
 interface Recipe {
     id: string;
     name: string;
@@ -26,15 +48,14 @@ interface Recipe {
     ingredients: string;
     description: string;
     imageUrl?: string;
-    userId: string;
+    userId: string; // ID автора
     isPublic: boolean;
     createdAt?: FirebaseFirestoreTypes.Timestamp;
+    tags?: string[];
+    author?: UserData; // Додаємо дані автора до рецепту для зручності відображення
 }
 
-// Компонент картки рецепту (такий самий, як в index.tsx)
-// Якщо він у тебе винесений в окремий файл (наприклад, components/RecipeCardItem.tsx),
-// то імпортуй його звідти, щоб не дублювати код.
-// Я залишу його тут для повноти прикладу.
+// Компонент картки рецепту - тепер з інформацією про автора
 const RecipeCardItem = ({ item, onPress }: { item: Recipe; onPress: () => void }) => (
     <TouchableOpacity onPress={onPress} style={styles.recipeCard}>
         <Image
@@ -48,70 +69,135 @@ const RecipeCardItem = ({ item, onPress }: { item: Recipe; onPress: () => void }
                 <Image source={icons.clock} style={styles.recipeTimeIcon} />
                 <Text style={styles.recipeTime}>{item.cookingTime}</Text>
             </View>
+            {/* Відображення автора */}
+            {item.author && (
+                <View style={styles.authorContainer}>
+                    <Image
+                        source={item.author.photoURL ? {uri: item.author.photoURL} : images.placeholder} // Потрібна іконка profile_default
+                        style={styles.authorAvatar}
+                    />
+                    <Text style={styles.authorName} numberOfLines={1}>
+                        {item.author.displayName || 'Анонімний кухар'}
+                    </Text>
+                </View>
+            )}
         </View>
     </TouchableOpacity>
 );
 
-export default function SearchScreen() { // Перейменовано з Search на SearchScreen для ясності
+export default function GlobalRecipesScreen() { // Перейменовано
     const router = useRouter();
     const [allPublicRecipes, setAllPublicRecipes] = useState<Recipe[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
+    const [selectedSearchTags, setSelectedSearchTags] = useState<string[]>([]);
     const currentUser = auth().currentUser;
+
+    // Функція для завантаження даних авторів для списку рецептів
+    const fetchAuthorsForRecipes = async (recipesToEnrich: Recipe[]): Promise<Recipe[]> => {
+        if (recipesToEnrich.length === 0) return [];
+
+        const authorIds = [...new Set(recipesToEnrich.map(recipe => recipe.userId).filter(Boolean))]; // Унікальні ID авторів
+        if (authorIds.length === 0) return recipesToEnrich;
+
+        const authorsData: Record<string, UserData> = {};
+
+        // Розбиваємо authorIds на частини по 10 (максимум для 'in' запиту в Firestore для ID)
+        const CHUNK_SIZE = 10;
+        for (let i = 0; i < authorIds.length; i += CHUNK_SIZE) {
+            const chunk = authorIds.slice(i, i + CHUNK_SIZE);
+            if (chunk.length > 0) {
+                try {
+                    const usersSnapshot = await firestore()
+                        .collection("users") // Припускаємо, що колекція користувачів називається 'users'
+                        .where(firestore.FieldPath.documentId(), "in", chunk)
+                        .get();
+
+                    usersSnapshot.forEach(doc => {
+                        authorsData[doc.id] = { uid: doc.id, ...doc.data() } as UserData;
+                    });
+                } catch (error) {
+                    console.error("Error fetching authors for chunk:", chunk, error);
+                }
+            }
+        }
+
+        return recipesToEnrich.map(recipe => ({
+            ...recipe,
+            author: authorsData[recipe.userId],
+        }));
+    };
+
 
     useEffect(() => {
         setLoading(true);
         let query = firestore()
             .collection("recipes")
-            .where("isPublic", "==", true) // Тільки публічні рецепти
-            .orderBy("createdAt", "desc"); // Сортуємо (може потребувати індексу)
+            .where("isPublic", "==", true)
+            .orderBy("createdAt", "desc");
 
-        // Якщо користувач залогінений, виключаємо його власні рецепти
         if (currentUser) {
             query = query.where("userId", "!=", currentUser.uid);
         }
 
         const subscriber = query.onSnapshot(
-            (querySnapshot) => {
+            async (querySnapshot) => {
+                console.log("GlobalRecipesScreen: onSnapshot triggered for public recipes.");
                 const publicRecipes: Recipe[] = [];
                 if (querySnapshot) {
                     querySnapshot.forEach((documentSnapshot) => {
-                        // Додатково перевіряємо, чи це не рецепт поточного користувача (для випадків, коли where "!=" не спрацював ідеально або для незалогіненого)
-                        // Хоча where("userId", "!=", currentUser.uid) має це робити на рівні запиту, якщо currentUser існує.
-                        // Якщо currentUser null, то where("userId", "!=", null) не спрацює як очікується.
-                        // Тому, якщо currentUser є, подвійна перевірка не завадить, або покладатися на запит.
-                        // Я залишу як є, покладаючись на запит Firestore.
                         publicRecipes.push({
                             id: documentSnapshot.id,
                             ...(documentSnapshot.data() as Omit<Recipe, 'id'>),
                         });
                     });
                 }
-                setAllPublicRecipes(publicRecipes);
+
+                // Завантажуємо дані авторів для отриманих рецептів
+                const recipesWithAuthors = await fetchAuthorsForRecipes(publicRecipes);
+                setAllPublicRecipes(recipesWithAuthors);
                 setLoading(false);
             },
             (error) => {
                 console.error("Error fetching public recipes: ", error);
                 setLoading(false);
-                // Alert.alert("Помилка", "Не вдалося завантажити рецепти.");
+                //Alert.alert("Помилка", "Не вдалося завантажити публічні рецепти.");
             }
         );
 
-        return () => subscriber();
-    }, [currentUser]); // Перезавантажуємо, якщо змінився користувач (наприклад, залогінився/розлогінився)
+        return () => {
+            console.log("GlobalRecipesScreen: Unsubscribing from public recipes listener.");
+            subscriber();
+        };
+    }, [currentUser]);
+
+    const handleToggleSearchTag = (tag: string) => {
+        setSelectedSearchTags(prevTags =>
+            prevTags.includes(tag)
+                ? prevTags.filter(t => t !== tag)
+                : [...prevTags, tag]
+        );
+    };
 
     const filteredRecipes = useMemo(() => {
-        if (!searchQuery) {
-            return allPublicRecipes;
+        let recipesToFilter = allPublicRecipes;
+
+        if (searchQuery) {
+            const lowerCaseQuery = searchQuery.toLowerCase();
+            recipesToFilter = recipesToFilter.filter((recipe) => {
+                const nameMatch = recipe.name.toLowerCase().includes(lowerCaseQuery);
+                const ingredientsMatch = recipe.ingredients.toLowerCase().includes(lowerCaseQuery);
+                return nameMatch || ingredientsMatch;
+            });
         }
-        const lowerCaseQuery = searchQuery.toLowerCase();
-        return allPublicRecipes.filter((recipe) => {
-            const nameMatch = recipe.name.toLowerCase().includes(lowerCaseQuery);
-            // Пошук по інгредієнтах (як підрядок)
-            const ingredientsMatch = recipe.ingredients.toLowerCase().includes(lowerCaseQuery);
-            return nameMatch || ingredientsMatch;
-        });
-    }, [allPublicRecipes, searchQuery]);
+
+        if (selectedSearchTags.length > 0) {
+            recipesToFilter = recipesToFilter.filter(recipe =>
+                selectedSearchTags.every(tag => recipe.tags && recipe.tags.includes(tag))
+            );
+        }
+        return recipesToFilter;
+    }, [allPublicRecipes, searchQuery, selectedSearchTags]);
 
     const handleRecipePress = (recipeId: string) => {
         router.push(`/meals/${recipeId}`);
@@ -119,17 +205,16 @@ export default function SearchScreen() { // Перейменовано з Search
 
     if (loading && allPublicRecipes.length === 0) {
         return (
-            <View style={[styles.containerCentered, {backgroundColor: '#0f0D23'}]}>
-                <ActivityIndicator size="large" color="#FFFFFF" />
-            </View>
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.containerCentered}>
+                    <ActivityIndicator size="large" color="#FFFFFF" />
+                </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        <View style={styles.mainContainer}>
-            {/* Фонове зображення, якщо воно у тебе є і використовується тут */}
-            {/* <Image source={images.bg} style={styles.backgroundImage} /> */}
-
+        <SafeAreaView style={styles.safeArea}>
             <FlatList
                 data={filteredRecipes}
                 keyExtractor={(item) => item.id}
@@ -139,34 +224,54 @@ export default function SearchScreen() { // Перейменовано з Search
                 )}
                 ListHeaderComponent={
                     <>
-                        {/* Замість логотипу тут може бути заголовок "Пошук рецептів" або щось подібне */}
-                        <Text style={styles.pageTitle}>Знайти рецепти</Text>
-
-                        {/* Поле пошуку */}
+                        <Text style={styles.pageTitle}>Глобальні рецепти</Text>
                         <View style={styles.searchBarContainer}>
                             <Image source={icons.search} style={styles.searchIcon} />
                             <TextInput
                                 style={styles.searchInput}
-                                placeholder="Пошук за назвою або інгредієнтами..."
+                                placeholder="Пошук за назвою або інгредієнтами"
                                 placeholderTextColor="#A8B5DB"
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                             />
                         </View>
-
-                        {/* Можна додати заголовок секції, якщо потрібно */}
-                        {/* {filteredRecipes.length > 0 && (
-              <Text style={styles.sectionTitle}>Знайдені рецепти</Text>
-            )} */}
+                        <Text style={styles.tagsSectionTitle}>Фільтрувати за тегами:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagsScrollContainer}>
+                            {AVAILABLE_TAGS.map(tag => (
+                                <TouchableOpacity
+                                    key={tag}
+                                    style={[
+                                        styles.tagButton,
+                                        selectedSearchTags.includes(tag) && styles.tagButtonSelected
+                                    ]}
+                                    onPress={() => handleToggleSearchTag(tag)}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.tagText,
+                                            selectedSearchTags.includes(tag) && styles.tagTextSelected
+                                        ]}
+                                    >
+                                        {tag}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                        {(filteredRecipes.length > 0 || (!searchQuery && allPublicRecipes.length > 0 && selectedSearchTags.length === 0)) && (
+                            <Text style={styles.sectionTitle}>Знайдені рецепти</Text>
+                        )}
                     </>
                 }
                 ListEmptyComponent={
                     !loading ? (
                         <View style={styles.emptyContainer}>
-                            <Image source={images.placeholder || icons.logo} style={styles.emptyIcon} /> {/* Використай іконку "не знайдено" */}
+                            <Image source={searchQuery || selectedSearchTags.length > 0 ? icons.notFound : images.placeholder} // Іконка для порожнього глобального списку
+                                   style={styles.emptyIcon}
+                                   resizeMode="contain"
+                            />
                             <Text style={styles.emptyText}>
-                                {searchQuery
-                                    ? "За вашим запитом нічого не знайдено."
+                                {searchQuery || selectedSearchTags.length > 0
+                                    ? "За вашими критеріями нічого не знайдено."
                                     : "Поки що немає публічних рецептів для відображення."}
                             </Text>
                         </View>
@@ -175,122 +280,53 @@ export default function SearchScreen() { // Перейменовано з Search
                 contentContainerStyle={styles.listContentContainer}
                 showsVerticalScrollIndicator={false}
             />
-        </View>
+        </SafeAreaView>
     );
 }
 
-// Використовуємо ті самі стилі, що й для index.tsx (або дуже схожі)
-// Переконайся, що цей StyleSheet імпортовано з 'react-native'
+// Стилі, аналогічні до index.tsx, але з додаванням стилів для автора в картці
 const styles = StyleSheet.create({
-    mainContainer: {
-        flex: 1,
-        backgroundColor: "#0f0D23",
-    },
-    pageTitle: { // Новий стиль для заголовка сторінки
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#FFFFFF',
-        textAlign: 'center',
-        marginTop: Platform.OS === 'ios' ? 70 : 50, // Більший відступ зверху
-        marginBottom: 20,
-    },
-    backgroundImage: {
-        position: "absolute",
-        width: "100%",
-        height: "100%",
-        zIndex: 0,
-    },
-    // Логотип тут не потрібен, замість нього pageTitle
-    // logo: { ... },
-    searchBarContainer: {
+    safeArea: { flex: 1, backgroundColor: "#0f0D23" },
+    containerCentered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f0D23' },
+    pageTitle: { fontSize: 26, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center', marginTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 20, marginBottom: 20 },
+    searchBarContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E1C32', borderRadius: 12, paddingHorizontal: 15, marginHorizontal: 20, marginBottom: 15, height: 50 },
+    searchIcon: { width: 20, height: 20, tintColor: '#A8B5DB', marginRight: 10 },
+    searchInput: { flex: 1, fontSize: 16, color: "#FFFFFF" },
+    tagsSectionTitle: { fontSize: 16, fontWeight: '600', color: '#A8B5DB', marginLeft: 20, marginBottom: 10, marginTop: 10 },
+    tagsScrollContainer: { paddingHorizontal: 20, paddingBottom: 15 },
+    tagButton: { backgroundColor: TAG_BACKGROUND_COLOR, paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: '#2A3045' },
+    tagButtonSelected: { backgroundColor: TAG_BACKGROUND_COLOR_SELECTED, borderColor: TAG_BACKGROUND_COLOR_SELECTED },
+    tagText: { color: TAG_TEXT_COLOR, fontSize: 14 },
+    tagTextSelected: { color: TAG_TEXT_COLOR_SELECTED, fontWeight: 'bold' },
+    sectionTitle: { fontSize: 20, fontWeight: "bold", color: "#FFFFFF", marginLeft: 20, marginBottom: 10, marginTop: 10 },
+    listContentContainer: { paddingHorizontal: 12, paddingBottom: 90 },
+    recipeCard: { flex: 1, margin: 8, backgroundColor: "#1E1C32", borderRadius: 15, overflow: "hidden" },
+    recipeImage: { width: "100%", height: 110 }, // Зробив зображення трохи меншим, щоб вмістити автора
+    recipeInfo: { padding: 10 }, // Зменшив падінг
+    recipeName: { fontSize: 15, fontWeight: "bold", color: "#FFFFFF", marginBottom: 4 }, // Трохи менший шрифт
+    recipeTimeContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 }, // Додав відступ знизу
+    recipeTimeIcon: { width: 12, height: 12, tintColor: '#A8B5DB', marginRight: 4 },
+    recipeTime: { fontSize: 11, color: "#A8B5DB" },
+    authorContainer: { // Нові стилі для блоку автора
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1E1C32',
+        marginTop: 5,
+    },
+    authorAvatar: {
+        width: 24, // Маленький аватар
+        height: 24,
         borderRadius: 12,
-        paddingHorizontal: 15,
-        marginHorizontal: 20,
-        marginBottom: 25,
-        height: 50,
+        marginRight: 6,
+        backgroundColor: '#3C3F5E', // Заглушка, якщо немає фото
     },
-    searchIcon: {
-        width: 20,
-        height: 20,
-        tintColor: '#A8B5DB',
-        marginRight: 10,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 16,
-        color: "#FFFFFF",
-    },
-    sectionTitle: {
-        fontSize: 20,
-        fontWeight: "bold",
-        color: "#FFFFFF",
-        marginLeft: 20,
-        marginBottom: 10,
-    },
-    listContentContainer: {
-        paddingHorizontal: 12,
-        paddingBottom: 80,
-    },
-    recipeCard: {
-        flex: 1,
-        margin: 8,
-        backgroundColor: "#1E1C32",
-        borderRadius: 15,
-        overflow: "hidden",
-    },
-    recipeImage: {
-        width: "100%",
-        height: 130,
-    },
-    recipeInfo: {
-        padding: 12,
-    },
-    recipeName: {
-        fontSize: 16,
-        fontWeight: "bold",
-        color: "#FFFFFF",
-        marginBottom: 5,
-    },
-    recipeTimeContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    recipeTimeIcon: {
-        width: 14,
-        height: 14,
-        tintColor: '#A8B5DB',
-        marginRight: 5,
-    },
-    recipeTime: {
-        fontSize: 12,
-        color: "#A8B5DB",
-    },
-    containerCentered: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 50,
-        paddingHorizontal: 20, // Додав, щоб текст не прилипав до країв
-    },
-    emptyIcon: {
-        width: 80, // Трохи менша іконка
-        height: 80,
-        tintColor: '#A8B5DB',
-        marginBottom: 20,
-    },
-    emptyText: {
-        fontSize: 16,
+    authorName: {
+        fontSize: 11,
         color: '#A8B5DB',
-        textAlign: 'center',
-        marginBottom: 20,
+        flexShrink: 1, // Щоб довге ім'я обрізалося
     },
-    // addButton та addButtonText тут не потрібні
+    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, marginTop: 30 },
+    emptyIcon: { width: 80, height: 80, tintColor: '#A8B5DB', marginBottom: 20 },
+    emptyText: { fontSize: 16, color: '#A8B5DB', textAlign: 'center', marginBottom: 20 },
+    addButton: { backgroundColor: '#C37AFF', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 25 },
+    addButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }
 });
