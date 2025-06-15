@@ -88,7 +88,7 @@ const _Layout = () => {
                     tabBarIcon: ({ focused }) => (
                         <TabIcon
                             focused={focused}
-                            icon={icons.save}
+                            icon={icons.plus}
                             title="Add"
                         />
                     )

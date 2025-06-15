@@ -252,7 +252,7 @@ export default function SavedRecipesScreen() {
                                     : "Ви ще не зберегли жодного рецепту."}
                             </Text>
                             {!searchQuery && (
-                                <TouchableOpacity onPress={() => router.push('/(tabs)/search')} style={styles.addButton}>
+                                <TouchableOpacity onPress={() => router.push('/(tabs)/global')} style={styles.addButton}>
                                     <Text style={styles.addButtonText}>Знайти рецепти</Text>
                                 </TouchableOpacity>
                             )}

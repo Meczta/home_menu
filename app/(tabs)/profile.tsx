@@ -271,6 +271,10 @@ export default function ProfileScreen() {
 
                 {/* ... Розділ Налаштування (якщо потрібен) ... */}
 
+                <TouchableOpacity style={styles.menuButton} onPress={() => router.push('/planning')}>
+                    <Text style={styles.menuButtonText}>Моє планування меню</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                     <Text style={styles.logoutButtonText}>Вийти з системи</Text>
                 </TouchableOpacity>
@@ -440,6 +444,18 @@ const styles = StyleSheet.create({
     },
     logoutButtonText: {
         color: TEXT_COLOR_PRIMARY,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    menuButton: {
+        backgroundColor: '#1E1C32', // Колір як у інформаційних блоків
+        paddingVertical: 15,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 30,
+    },
+    menuButtonText: {
+        color: '#FFFFFF',
         fontSize: 16,
         fontWeight: 'bold',
     },

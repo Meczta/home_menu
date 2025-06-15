@@ -21,19 +21,17 @@ import storage from '@react-native-firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 
-// Колірна схема (залишається як була)
 const PRIMARY_BACKGROUND_COLOR = '#1A2035';
 const INPUT_BACKGROUND_COLOR = '#2A3045';
 const TEXT_COLOR_ON_DARK = '#FFFFFF';
 const PLACEHOLDER_TEXT_COLOR = '#A0A0B0';
 const ACCENT_COLOR_BUTTON = '#7E57C2';
 const ACCENT_COLOR_SWITCH = '#9575CD';
-const TAG_BACKGROUND_COLOR = '#3A3F5E'; // Колір для неактивного тегу
-const TAG_BACKGROUND_COLOR_SELECTED = ACCENT_COLOR_SWITCH; // Колір для активного тегу
+const TAG_BACKGROUND_COLOR = '#3A3F5E';
+const TAG_BACKGROUND_COLOR_SELECTED = ACCENT_COLOR_SWITCH;
 const TAG_TEXT_COLOR = '#E0E0E0';
 const TAG_TEXT_COLOR_SELECTED = '#FFFFFF';
 
-// Список доступних тегів
 const AVAILABLE_TAGS = [
     "десерт", "суп", "випічка", "закуска",
     "солоне", "солодке", "кисле",
@@ -94,7 +92,6 @@ export default function AddRecipeScreen() {
             Alert.alert('Помилка', 'Будь ласка, заповніть всі обов\'язкові поля.');
             return;
         }
-        // Можна додати перевірку на кількість вибраних тегів, якщо потрібно
 
         setUploading(true);
         let uploadedImageUrl: string | null = null;
@@ -119,7 +116,7 @@ export default function AddRecipeScreen() {
                 createdAt: firestore.FieldValue.serverTimestamp(),
             });
 
-            Alert.alert('Успіх!', 'Рецепт успішно додано.');
+            Alert.alert('Успішно!', 'Рецепт успішно додано.');
             // Очищення форми
             setName('');
             setCookingTime('');
@@ -273,8 +270,8 @@ const styles = StyleSheet.create({
         borderRadius: 11,
     },
     tagsContainer: { // Контейнер для всіх тегів
-        flexDirection: 'row', // Розміщуємо теги в рядок
-        flexWrap: 'wrap',     // Дозволяємо переноситися на новий рядок
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         marginBottom: 20,
     },
     tagButton: { // Стиль для кнопки тегу

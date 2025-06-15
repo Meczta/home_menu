@@ -14,6 +14,7 @@ import notFound from "@/assets/icons/notFound.png";
 import empty_recipes_folder from "@/assets/icons/empty_recipes_folder.png";
 import camera from "@/assets/icons/camera.png";
 import edit from "@/assets/icons/edit.png";
+import plus from "@/assets/icons/plus.png";
 
 export const icons = {
   home,
@@ -32,4 +33,5 @@ export const icons = {
   empty_recipes_folder,
   camera,
   edit,
+  plus,
 };
