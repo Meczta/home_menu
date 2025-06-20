@@ -11,7 +11,6 @@ import {
     Alert,
     Switch,
     Platform,
-    StatusBar,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
@@ -19,6 +18,7 @@ import auth from '@react-native-firebase/auth';
 import { icons } from '@/constants/icons';
 import { images } from '@/constants/images';
 import storage from "@react-native-firebase/storage";
+import { StatusBar } from 'expo-status-bar'; // <-- ЗМІНА 1: ІМПОРТУЄМО З EXPO-STATUS-BAR
 
 interface Recipe {
     id: string;
@@ -40,10 +40,8 @@ export default function RecipeDetailScreen() {
     const [loading, setLoading] = useState(true);
     const [isOwner, setIsOwner] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
-
     const [isCurrentlySaved, setIsCurrentlySaved] = useState(false);
     const [isSavingBookmark, setIsSavingBookmark] = useState(false);
-
     const currentUser = auth().currentUser;
 
     useEffect(() => {
@@ -62,10 +60,7 @@ export default function RecipeDetailScreen() {
                     if (documentSnapshot.exists) {
                         const dataFromSnapshot = documentSnapshot.data();
                         if (dataFromSnapshot) {
-                            const recipeData = {
-                                id: documentSnapshot.id,
-                                ...dataFromSnapshot,
-                            } as Recipe;
+                            const recipeData = { id: documentSnapshot.id, ...dataFromSnapshot } as Recipe;
                             setRecipe(recipeData);
                             setIsOwner(currentUser?.uid === recipeData.userId);
                         } else {
@@ -93,12 +88,8 @@ export default function RecipeDetailScreen() {
     useEffect(() => {
         if (currentUser && recipeId) {
             const bookmarkDocId = `${currentUser.uid}_${recipeId}`;
-            const subscriber = firestore()
-                .collection('user_bookmarks')
-                .doc(bookmarkDocId)
-                .onSnapshot(docSnapshot => {
-                    setIsCurrentlySaved(docSnapshot.exists);
-                });
+            const subscriber = firestore().collection('user_bookmarks').doc(bookmarkDocId)
+                .onSnapshot(docSnapshot => { setIsCurrentlySaved(docSnapshot.exists); });
             return () => subscriber();
         } else {
             setIsCurrentlySaved(false);
@@ -139,6 +130,7 @@ export default function RecipeDetailScreen() {
             }]
         );
     };
+
     const toggleIsPublic = async () => {
         if (!recipe || !isOwner || !currentUser) return;
         const newIsPublicStatus = !recipe.isPublic;
@@ -150,6 +142,7 @@ export default function RecipeDetailScreen() {
             Alert.alert('Помилка', 'Не вдалося оновити статус публічності.');
         }
     };
+
     const handleToggleBookmark = async () => {
         if (!currentUser || !recipeId || isSavingBookmark) return;
         setIsSavingBookmark(true);
@@ -176,6 +169,7 @@ export default function RecipeDetailScreen() {
     if (loading || !recipe) {
         return (
             <View style={styles.loadingContainer}>
+                <StatusBar hidden />
                 <ActivityIndicator size="large" color="#FFFFFF" />
             </View>
         );
@@ -187,7 +181,7 @@ export default function RecipeDetailScreen() {
         headerStyle: { backgroundColor: '#0f0D23' },
         headerTintColor: '#FFFFFF',
         headerBackTitleVisible: false,
-        headerTransparent: false, // Важливо для правильного відступу контенту
+        headerTransparent: false,
         headerRightContainerStyle: { paddingRight: 15 },
         headerLeftContainerStyle: { paddingLeft: 10 },
         headerRight: () => (
@@ -201,6 +195,7 @@ export default function RecipeDetailScreen() {
 
     return (
         <View style={styles.mainContainer}>
+            <StatusBar hidden />
             <Stack.Screen options={stackScreenOptions}/>
 
             {showMenu && isOwner && (
@@ -215,14 +210,13 @@ export default function RecipeDetailScreen() {
                 contentContainerStyle={styles.scrollContentContainer}
                 showsVerticalScrollIndicator={false}
             >
-                <Image // Тепер це знову просто Image
+                <Image
                     source={recipe.imageUrl ? { uri: recipe.imageUrl } : images.placeholder}
                     style={styles.recipeImage}
                     resizeMode="cover"
                 />
 
                 <View style={styles.contentContainer}>
-                    {/* Контейнер для назви та кнопки збереження */}
                     <View style={styles.titleBookmarkRow}>
                         <Text style={styles.recipeTitle}>{recipe.name}</Text>
                         {currentUser && (
@@ -295,7 +289,6 @@ const styles = StyleSheet.create({
     mainContainer: {
         flex: 1,
         backgroundColor: '#0f0D23',
-        // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, // ПРИБРАНО ЗВІДСИ, бо заголовок непрозорий
     },
     loadingContainer: {
         flex: 1,
@@ -313,10 +306,7 @@ const styles = StyleSheet.create({
     },
     optionsMenu: {
         position: 'absolute',
-        // Приблизна висота стандартного заголовка (враховуючи статус-бар) ~56-60 для Android, ~90 для iOS з великим заголовком.
-        // Якщо заголовок стандартний, то відступ має бути від його нижнього краю.
-        // Спробуємо встановити відносно невеликий відступ, припускаючи, що сам заголовок вже має правильну висоту.
-        top: Platform.OS === 'ios' ? 50 : 50, // Зменшив, бо заголовок непрозорий і має відступ
+        top: Platform.OS === 'ios' ? 50 : 50,
         right: 15,
         backgroundColor: '#1E1C32',
         borderRadius: 8,
@@ -342,30 +332,29 @@ const styles = StyleSheet.create({
     },
     contentContainer: {
         paddingHorizontal: 20,
-        paddingTop: 20, // Відступ зверху для назви та іншого контенту
+        paddingTop: 20,
         backgroundColor: '#0f0D23',
     },
     titleBookmarkRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between', // Розміщує назву зліва, кнопку справа
-        alignItems: 'center',      // Вирівнює по центру вертикалі
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 20,
     },
     recipeTitle: {
         fontSize: 26,
         fontWeight: 'bold',
         color: '#FFFFFF',
-        flex: 1, // Дозволяє назві зайняти доступний простір
-        marginRight: 10, // Відступ від кнопки збереження
+        flex: 1,
+        marginRight: 10,
         textAlign: 'left',
     },
-    bookmarkButtonInline: { // Стиль для кнопки збереження поруч з назвою
-        padding: 8, // Область натискання
+    bookmarkButtonInline: {
+        padding: 8,
     },
-    bookmarkIconInline: { // Стиль для іконки збереження поруч з назвою
+    bookmarkIconInline: {
         width: 28,
         height: 28,
-        // tintColor: isCurrentlySaved ? '#C37AFF' : '#FFFFFF', // Якщо потрібен tintColor
     },
     sectionHeader: {
         fontSize: 20,

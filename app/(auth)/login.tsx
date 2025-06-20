@@ -4,24 +4,26 @@ import {
     View,
     Text,
     TextInput,
-    TouchableOpacity, // Замінимо Button на TouchableOpacity для кращого стилю
+    TouchableOpacity,
     StyleSheet,
     Alert,
-    Image, // Для логотипу
-    ActivityIndicator, // Для індикатора завантаження
+    Image,
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import { Link, useRouter } from 'expo-router';
-import { images } from '@/constants/images'; // Імпорт твого зображення
-import { SafeAreaView } from 'react-native-safe-area-context'; // Для уникнення накладання на статус-бар
+import { images } from '@/constants/images';
+import { icons } from '@/constants/icons'; // Імпорт іконок
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false); // Стан для індикатора завантаження
+    const [loading, setLoading] = useState(false);
+    const [isPasswordVisible, setPasswordVisible] = useState(false); // <-- НОВИЙ СТАН
     const router = useRouter();
 
     const handleLogin = async () => {
@@ -32,8 +34,6 @@ export default function LoginScreen() {
         setLoading(true);
         try {
             await auth().signInWithEmailAndPassword(email, password);
-            // Навігація на головний екран відбудеться автоматично
-            // завдяки логіці в app/_layout.tsx
         } catch (error: any) {
             let errorMessage = 'Виникла помилка. Спробуйте ще раз.';
             if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
@@ -53,7 +53,7 @@ export default function LoginScreen() {
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.keyboardAvoidingView}
             >
-                <ScrollView contentContainerStyle={styles.scrollContainer}>
+                <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
                     <View style={styles.container}>
                         <Image source={images.bookRecipe} style={styles.logo} />
                         <Text style={styles.title}>Ласкаво просимо!</Text>
@@ -67,15 +67,29 @@ export default function LoginScreen() {
                             keyboardType="email-address"
                             autoCapitalize="none"
                             placeholderTextColor="#8A8A8D"
+                            autoComplete="email" // <-- ВИПРАВЛЕННЯ 1: Прибираємо жовтий фон
                         />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Пароль"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                            placeholderTextColor="#8A8A8D"
-                        />
+
+                        {/* ВИПРАВЛЕННЯ 2: Поле для пароля з іконкою */}
+                        <View style={styles.passwordContainer}>
+                            <TextInput
+                                style={styles.passwordInput}
+                                placeholder="Пароль"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry={!isPasswordVisible} // <-- Контролюємо видимість
+                                placeholderTextColor="#8A8A8D"
+                            />
+                            <TouchableOpacity
+                                style={styles.eyeIcon}
+                                onPress={() => setPasswordVisible(!isPasswordVisible)}
+                            >
+                                <Image
+                                    source={isPasswordVisible ? icons.eye : icons.eye_hide} // <-- Змінюємо іконку
+                                    style={{ width: 24, height: 24, tintColor: '#8A8A8D' }}
+                                />
+                            </TouchableOpacity>
+                        </View>
 
                         <TouchableOpacity
                             style={[styles.button, loading && styles.buttonDisabled]}
@@ -107,7 +121,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#0f0D23', // Фон як на головній
+        backgroundColor: '#0f0D23',
     },
     keyboardAvoidingView: {
         flex: 1,
@@ -121,10 +135,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 25,
-        paddingBottom: 20, // Додатковий відступ знизу
+        paddingBottom: 20,
     },
     logo: {
-        width: 100, // Налаштуй розмір логотипу
+        width: 100,
         height: 100,
         resizeMode: 'contain',
         marginBottom: 30,
@@ -145,26 +159,48 @@ const styles = StyleSheet.create({
     input: {
         width: '100%',
         height: 50,
-        backgroundColor: '#1E1C32', // Темний фон для полів
+        backgroundColor: '#1E1C32',
         borderRadius: 12,
         paddingHorizontal: 15,
         fontSize: 16,
         color: '#FFFFFF',
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: '#2C2C2D', // Тонка рамка
+        borderColor: '#2C2C2D',
     },
+    // НОВІ СТИЛІ для пароля
+    passwordContainer: {
+        width: '100%',
+        height: 50,
+        backgroundColor: '#1E1C32',
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#2C2C2D',
+    },
+    passwordInput: {
+        flex: 1,
+        paddingHorizontal: 15,
+        fontSize: 16,
+        color: '#FFFFFF',
+    },
+    eyeIcon: {
+        padding: 10,
+    },
+    // ---
     button: {
         width: '100%',
         height: 50,
-        backgroundColor: '#C37AFF', // Фіолетовий акцент
+        backgroundColor: '#C37AFF',
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 12,
         marginTop: 10,
     },
     buttonDisabled: {
-        backgroundColor: '#7A5FAB', // Затемнений колір для неактивної кнопки
+        backgroundColor: '#7A5FAB',
     },
     buttonText: {
         color: '#FFFFFF',
@@ -183,7 +219,7 @@ const styles = StyleSheet.create({
     },
     link: {
         fontSize: 14,
-        color: '#C37AFF', // Фіолетовий для посилання
+        color: '#C37AFF',
         fontWeight: 'bold',
     },
 });
