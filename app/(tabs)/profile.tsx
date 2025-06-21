@@ -19,12 +19,12 @@ import storage from '@react-native-firebase/storage';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { icons } from '@/constants/icons';
-import { images } from '@/constants/images'; // Якщо використовується для фону чи чогось ще
-import { SafeAreaView } from 'react-native-safe-area-context'; // Для відступів зверху/знизу
+import { images } from '@/constants/images';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Кольори
-const PRIMARY_BACKGROUND_COLOR = '#0f0D23'; // Той самий фон, що й на головній/додаванні
-const INPUT_BACKGROUND_COLOR = '#1E1C32'; // Для полів та інформаційних блоків
+const PRIMARY_BACKGROUND_COLOR = '#0f0D23';
+const INPUT_BACKGROUND_COLOR = '#1E1C32';
 const TEXT_COLOR_PRIMARY = '#FFFFFF';
 const TEXT_COLOR_SECONDARY = '#A8B5DB';
 const ACCENT_COLOR = '#C37AFF';
@@ -39,7 +39,7 @@ interface UserProfileData {
 }
 
 export default function ProfileScreen() {
-    const router = useRouter(); // router використовується для навігації після певних дій
+    const router = useRouter();
     const [userAuth, setUserAuth] = useState<FirebaseAuthTypes.User | null>(null);
     const [userData, setUserData] = useState<UserProfileData | null>(null);
     const [recipeCount, setRecipeCount] = useState(0);
@@ -49,7 +49,7 @@ export default function ProfileScreen() {
     const [isUploadingImage, setIsUploadingImage] = useState(false);
 
     const loadUserData = useCallback(async (firebaseUser: FirebaseAuthTypes.User) => {
-        setLoading(true);
+        // Не встановлюємо setLoading(true) тут, оскільки він вже true на початку
         try {
             const userDoc = await firestore().collection('users').doc(firebaseUser.uid).get();
             // @ts-ignore
@@ -74,7 +74,7 @@ export default function ProfileScreen() {
 
         } catch (error) {
             console.error("Error fetching user data or recipe count: ", error);
-            // Alert.alert("Помилка", "Не вдалося завантажити дані профілю.");
+            Alert.alert("Помилка", "Не вдалося завантажити дані профілю.");
         } finally {
             setLoading(false);
         }
@@ -86,6 +86,7 @@ export default function ProfileScreen() {
             if (firebaseUser) {
                 loadUserData(firebaseUser);
             } else {
+                // Якщо користувач виходить, зупиняємо завантаження
                 setUserData(null);
                 setRecipeCount(0);
                 setLoading(false);
@@ -94,24 +95,17 @@ export default function ProfileScreen() {
         return subscriber;
     }, [loadUserData]);
 
-    // --- ОСЬ ФУНКЦІЯ ВИХОДУ ---
     const handleLogout = async () => {
         Alert.alert(
             "Вихід з системи",
             "Ви впевнені, що хочете вийти?",
             [
-                {
-                    text: "Скасувати",
-                    style: "cancel"
-                },
+                { text: "Скасувати", style: "cancel" },
                 {
                     text: "Вийти",
                     onPress: async () => {
                         try {
                             await auth().signOut();
-                            // Навігація на екран входу відбудеться автоматично
-                            // завдяки логіці в app/_layout.tsx.
-                            // router.replace('/(auth)/login'); // Цей рядок тут зазвичай не потрібен.
                         } catch (error: any) {
                             console.error("Error signing out: ", error);
                             Alert.alert("Помилка виходу", error.message || "Не вдалося вийти з системи.");
@@ -122,8 +116,6 @@ export default function ProfileScreen() {
             ]
         );
     };
-    // --- КІНЕЦЬ ФУНКЦІЇ ВИХОДУ ---
-
 
     const handlePickImage = async () => {
         if (!userAuth) return;
@@ -132,7 +124,7 @@ export default function ProfileScreen() {
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
-                aspect: [1, 1], // Для квадратного аватара
+                aspect: [1, 1],
                 quality: 0.5,
             });
 
@@ -149,7 +141,6 @@ export default function ProfileScreen() {
                 await firestore().collection('users').doc(userAuth.uid).update({ photoURL });
 
                 setUserData(prev => prev ? { ...prev, photoURL } : { photoURL });
-                setUserAuth(auth().currentUser); // Оновити локальний стан userAuth, щоб побачити зміни
                 Alert.alert("Успіх", "Фото профілю оновлено!");
             }
         } catch (error: any) {
@@ -165,27 +156,23 @@ export default function ProfileScreen() {
             Alert.alert("Помилка", "Ім'я не може бути порожнім.");
             return;
         }
-        setLoading(true); // Можна додати окремий лоадер для імені
         try {
             await userAuth.updateProfile({ displayName: newDisplayName.trim() });
             await firestore().collection('users').doc(userAuth.uid).update({
                 displayName: newDisplayName.trim()
             });
             setUserData(prev => prev ? { ...prev, displayName: newDisplayName.trim() } : { displayName: newDisplayName.trim() });
-            setUserAuth(auth().currentUser);
             setIsEditingName(false);
             Alert.alert("Успіх", "Ім'я оновлено!");
         } catch (error: any) {
             console.error("Error updating display name: ", error);
             Alert.alert("Помилка", "Не вдалося оновити ім'я.");
-        } finally {
-            setLoading(false);
         }
     };
 
     if (loading) {
         return (
-            <View style={styles.centered}> {/* <--- ВИПРАВЛЕНО */}
+            <View style={styles.centered}>
                 <ActivityIndicator size="large" color={TEXT_COLOR_PRIMARY} />
             </View>
         );
@@ -193,9 +180,8 @@ export default function ProfileScreen() {
 
     if (!userAuth) {
         return (
-            <View style={styles.centered}> {/* <--- ВИПРАВЛЕНО */}
+            <View style={styles.centered}>
                 <Text style={styles.infoText}>Не вдалося завантажити профіль. Спробуйте увійти знову.</Text>
-                {/* Можна додати кнопку для переходу на екран входу, якщо router доступний */}
                 <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace('/(auth)/login')}>
                     <Text style={styles.logoutButtonText}>Перейти до Входу</Text>
                 </TouchableOpacity>
@@ -258,7 +244,8 @@ export default function ProfileScreen() {
                             </View>
                         </View>
                     )}
-                    <Text style={styles.emailText}>{userAuth.email}</Text>
+                    {/* Додано невеликий захист на випадок, якщо email відсутній */}
+                    <Text style={styles.emailText}>{userAuth.email || ''}</Text>
                 </View>
 
                 <View style={styles.statsContainer}>
@@ -268,8 +255,6 @@ export default function ProfileScreen() {
                     </View>
                     {/* ... інші блоки статистики ... */}
                 </View>
-
-                {/* ... Розділ Налаштування (якщо потрібен) ... */}
 
                 <TouchableOpacity style={styles.menuButton} onPress={() => router.push('/planning')}>
                     <Text style={styles.menuButtonText}>Моє планування меню</Text>
@@ -284,6 +269,7 @@ export default function ProfileScreen() {
     );
 }
 
+// Повні стилі, як у вашому оригінальному файлі
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
@@ -294,19 +280,19 @@ const styles = StyleSheet.create({
     },
     contentContainer: {
         paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 + 20 : 30,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 30,
         paddingBottom: 40,
     },
     centered: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: PRIMARY_BACKGROUND_COLOR, // Додано фон
-        paddingHorizontal: 20, // Щоб текст помилки не прилипав до країв
+        backgroundColor: PRIMARY_BACKGROUND_COLOR,
+        paddingHorizontal: 20,
     },
     profileHeader: {
         alignItems: 'center',
-        marginBottom: 25, // Зменшив
+        marginBottom: 25,
     },
     avatarContainer: {
         position: 'relative',
@@ -318,7 +304,7 @@ const styles = StyleSheet.create({
         borderRadius: 60,
         borderWidth: 3,
         borderColor: ACCENT_COLOR,
-        backgroundColor: INPUT_BACKGROUND_COLOR, // Фон для випадку, якщо зображення не завантажилось
+        backgroundColor: INPUT_BACKGROUND_COLOR,
     },
     cameraIconOverlay: {
         position: 'absolute',
@@ -326,11 +312,11 @@ const styles = StyleSheet.create({
         right: 5,
         backgroundColor: TEXT_COLOR_PRIMARY,
         borderRadius: 15,
-        padding: 6, // Збільшив для кращого вигляду
-        elevation: 2, // Тінь на Android
+        padding: 6,
+        elevation: 2,
     },
     cameraIcon: {
-        width: 18, // Зменшив
+        width: 18,
         height: 18,
         tintColor: PRIMARY_BACKGROUND_COLOR,
     },
@@ -339,14 +325,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 8,
-        paddingHorizontal: 10, // Щоб довге ім'я не прилипало до іконки редагування
+        paddingHorizontal: 10,
     },
     displayName: {
-        fontSize: 24, // Зменшив
+        fontSize: 24,
         fontWeight: 'bold',
         color: TEXT_COLOR_PRIMARY,
         marginRight: 10,
-        textAlign: 'center', // Якщо ім'я одне, центруємо
+        textAlign: 'center',
     },
     editIcon: {
         width: 20,
@@ -357,10 +343,10 @@ const styles = StyleSheet.create({
         width: '100%',
         alignItems: 'center',
         marginBottom: 8,
-        paddingHorizontal: '10%', // Обмежимо ширину поля вводу
+        paddingHorizontal: '10%',
     },
     nameInput: {
-        width: '100%', // Тепер 100% від editNameContainer
+        width: '100%',
         backgroundColor: INPUT_BACKGROUND_COLOR,
         color: TEXT_COLOR_PRIMARY,
         borderRadius: 8,
@@ -372,20 +358,20 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: ACCENT_COLOR,
     },
-    editNameButtonsRow: { // Новий контейнер для кнопок редагування
+    editNameButtonsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around', // Розміщуємо кнопки з проміжком
+        justifyContent: 'space-around',
         width: '100%',
     },
-    editNameButtonText: { // <--- ОСНОВНИЙ СТИЛЬ ДЛЯ ТЕКСТУ КНОПОК РЕДАГУВАННЯ
-        fontSize: 14, // Розмір шрифту
-        fontWeight: '600', // Напівжирний
+    editNameButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
     },
-    editNameButton: { // Загальний стиль для кнопок
+    editNameButton: {
         paddingVertical: 8,
         paddingHorizontal: 20,
         borderRadius: 8,
-        minWidth: 100, // Мінімальна ширина
+        minWidth: 100,
         alignItems: 'center',
     },
     saveNameButton: {
@@ -396,7 +382,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     cancelNameButton: {
-        backgroundColor: 'transparent', // Прозора кнопка скасування
+        backgroundColor: 'transparent',
         borderWidth: 1,
         borderColor: TEXT_COLOR_SECONDARY,
     },
@@ -407,7 +393,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: TEXT_COLOR_SECONDARY,
     },
-    infoText: { // Додав стиль для тексту помилки, якщо !userAuth
+    infoText: {
         fontSize: 16,
         color: TEXT_COLOR_SECONDARY,
         textAlign: 'center',
@@ -423,7 +409,7 @@ const styles = StyleSheet.create({
     },
     statBox: {
         alignItems: 'center',
-        flex: 1, // Щоб бокси займали однакову ширину
+        flex: 1,
     },
     statValue: {
         fontSize: 22,
@@ -440,7 +426,7 @@ const styles = StyleSheet.create({
         paddingVertical: 15,
         borderRadius: 12,
         alignItems: 'center',
-        marginTop: 30, // Збільшив відступ
+        marginTop: 30,
     },
     logoutButtonText: {
         color: TEXT_COLOR_PRIMARY,
@@ -448,7 +434,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     menuButton: {
-        backgroundColor: '#1E1C32', // Колір як у інформаційних блоків
+        backgroundColor: '#1E1C32',
         paddingVertical: 15,
         borderRadius: 12,
         alignItems: 'center',

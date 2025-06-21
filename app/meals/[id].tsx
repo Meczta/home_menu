@@ -18,7 +18,7 @@ import auth from '@react-native-firebase/auth';
 import { icons } from '@/constants/icons';
 import { images } from '@/constants/images';
 import storage from "@react-native-firebase/storage";
-import { StatusBar } from 'expo-status-bar'; // <-- ЗМІНА 1: ІМПОРТУЄМО З EXPO-STATUS-BAR
+import { StatusBar } from 'expo-status-bar';
 
 interface Recipe {
     id: string;
@@ -65,11 +65,9 @@ export default function RecipeDetailScreen() {
                             setIsOwner(currentUser?.uid === recipeData.userId);
                         } else {
                             setRecipe(null);
-                            Alert.alert("Помилка", "Не вдалося завантажити дані рецепту (порожні дані).");
                             router.back();
                         }
                     } else {
-                        setRecipe(null);
                         Alert.alert("Помилка", "Рецепт не знайдено.");
                         router.back();
                     }
@@ -78,7 +76,6 @@ export default function RecipeDetailScreen() {
                 (error) => {
                     console.error('Error fetching recipe details: ', error);
                     setLoading(false);
-                    Alert.alert("Помилка", "Не вдалося завантажити деталі рецепту.");
                     router.back();
                 }
             );
@@ -129,6 +126,16 @@ export default function RecipeDetailScreen() {
                 },
             }]
         );
+    };
+
+    const handleEditRecipe = () => {
+        setShowMenu(false);
+        if (recipeId) {
+            router.push({
+                pathname: '/edit',
+                params: { recipeId: recipeId }
+            });
+        }
     };
 
     const toggleIsPublic = async () => {
@@ -200,8 +207,12 @@ export default function RecipeDetailScreen() {
 
             {showMenu && isOwner && (
                 <View style={styles.optionsMenu}>
+                    <TouchableOpacity onPress={handleEditRecipe} style={styles.menuItem}>
+                        <Text style={styles.menuItemText}>Редагувати рецепт</Text>
+                    </TouchableOpacity>
+                    <View style={styles.menuDivider} />
                     <TouchableOpacity onPress={handleDeleteRecipe} style={styles.menuItem}>
-                        <Text style={styles.menuItemText}>Видалити рецепт</Text>
+                        <Text style={[styles.menuItemText, styles.deleteMenuItemText]}>Видалити рецепт</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -209,6 +220,7 @@ export default function RecipeDetailScreen() {
             <ScrollView
                 contentContainerStyle={styles.scrollContentContainer}
                 showsVerticalScrollIndicator={false}
+                onScrollBeginDrag={() => showMenu && setShowMenu(false)}
             >
                 <Image
                     source={recipe.imageUrl ? { uri: recipe.imageUrl } : images.placeholder}
@@ -313,14 +325,26 @@ const styles = StyleSheet.create({
         paddingVertical: 5,
         zIndex: 1000,
         elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
     },
     menuItem: {
-        paddingVertical: 10,
+        paddingVertical: 12,
         paddingHorizontal: 15,
     },
     menuItemText: {
         color: '#FFFFFF',
         fontSize: 16,
+    },
+    deleteMenuItemText: {
+        color: '#FF6B6B',
+    },
+    menuDivider: {
+        height: 1,
+        backgroundColor: '#3A3F5E',
+        marginHorizontal: 10,
     },
     scrollContentContainer: {
         paddingBottom: 30,
